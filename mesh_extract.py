@@ -1,10 +1,10 @@
 import os
 from argparse import ArgumentParser
 
+import torch
 import numpy as np
 import open3d as o3d
 import open3d.core as o3c
-import torch
 
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import render
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_cluster", default=1, type=int)
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)
-    
+
     # Initialize system state (RNG)
     safe_state(args.quiet)
     with torch.no_grad():
