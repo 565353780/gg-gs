@@ -341,8 +341,8 @@ class Trainer(BaseGSTrainer):
                 if iteration % self.opt.scaling_reset_interval == 0 or (self.dataset.white_background and iteration == self.opt.densify_from_iter):
                     self.resetScaling()
 
-                if iteration % 100 == 0 and iteration > self.opt.densify_until_iter and not self.dataset.disable_filter3D:
-                    self.gaussians.compute_3D_filter(cameras=self.scene.train_cameras)
+            if iteration % 100 == 0 and iteration > self.opt.densify_until_iter and not self.dataset.disable_filter3D:
+                self.gaussians.compute_3D_filter(cameras=self.scene.train_cameras)
 
             self.updateGSParams()
 

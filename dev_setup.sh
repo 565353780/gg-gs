@@ -6,7 +6,7 @@ conda install -y conda-forge::cgal
 cd base-gs-trainer
 ./dev_setup.sh
 
-cd ../geo-gs/submodules/diff-gaussian-rasterization
+cd ../gg-gs/submodules/diff-gaussian-rasterization
 python setup.py install
 
 cd ../warp-patch-ncc
