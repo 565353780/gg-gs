@@ -132,7 +132,7 @@ class Trainer(BaseGSTrainer):
     def renderImage(
         self,
         viewpoint_cam,
-        reg_kick_on: bool,
+        reg_kick_on: bool = False,
     ) -> dict:
         return render(
             viewpoint_cam,
@@ -184,7 +184,7 @@ class Trainer(BaseGSTrainer):
 
         #reg_loss = l1_loss(image, gt_image)
         reg_loss = L1_loss_appearance(image, gt_image, self.gaussians, viewpoint_cam.uid)
-        ssim_loss = 1.0 - fused_ssim(image.unsqueeze(0), gt_image.unsqueeze(0))
+        ssim_loss = 1.0 - fused_ssim(image.unsqueeze(0), gt_image.unsqueeze(0), padding="valid")
         rgb_loss = (1.0 - lambda_dssim) * reg_loss + lambda_dssim * ssim_loss
 
         opacity_loss = torch.zeros([1], dtype=rgb_loss.dtype).to(rgb_loss.device)
@@ -256,8 +256,8 @@ class Trainer(BaseGSTrainer):
         return True
 
     @torch.no_grad()
-    def densifyStep(self) -> bool:
-        size_threshold = 20
+    def densifyStep(self, iteration: int) -> bool:
+        size_threshold = 20 if iteration > self.opt.opacity_reset_interval else None
         self.gaussians.densify_and_prune(
             self.opt.densify_grad_threshold,
             0.05,
@@ -306,45 +306,47 @@ class Trainer(BaseGSTrainer):
 
             render_pkg, loss_dict = self.trainStep(iteration, viewpoint_cam)
 
-            if iteration % 10 == 0:
-                bar_loss_dict = {
-                    "rgb": f"{loss_dict['rgb']:.{5}f}",
-                    "Points": f"{len(self.gaussians.get_xyz)}"
-                }
-                progress_bar.set_postfix(bar_loss_dict)
-                progress_bar.update(10)
+            with torch.no_grad():
+                if iteration % 10 == 0:
+                    bar_loss_dict = {
+                        "rgb": f"{loss_dict['rgb']:.{5}f}",
+                        "Points": f"{len(self.gaussians.get_xyz)}"
+                    }
+                    progress_bar.set_postfix(bar_loss_dict)
+                    progress_bar.update(10)
 
-            self.logStep(iteration, loss_dict)
+                    self.logStep(iteration, loss_dict)
 
-            if iteration % self.test_freq == 0:
-                self.logImageStep(
-                    iteration,
-                    render_image_num=1,
-                    is_fast=True,
-                )
+                if iteration % self.test_freq == 0:
+                    self.logImageStep(
+                        iteration,
+                        render_image_num=1,
+                        is_fast=True,
+                    )
 
-            if iteration % self.save_freq == 0:
-                print("\n[ITER {}] Saving Gaussians".format(iteration))
-                self.saveScene(iteration)
+                if iteration % self.save_freq == 0:
+                    print("\n[ITER {}] Saving Gaussians".format(iteration))
+                    self.saveScene(iteration)
 
-            # Densification
-            if iteration < self.opt.densify_until_iter:
-                self.recordGrads(render_pkg)
+                # Densification
+                if iteration < self.opt.densify_until_iter:
+                    self.recordGrads(render_pkg)
 
-                if iteration > self.opt.densify_from_iter and iteration % self.opt.densification_interval == 0:
-                    self.densifyStep()
-                    self.update3DFilter()
+                    if iteration > self.opt.densify_from_iter and iteration % self.opt.densification_interval == 0:
+                        self.densifyStep(iteration)
+                        self.update3DFilter()
 
-                if iteration % self.opt.opacity_reset_interval == 0 or (self.dataset.white_background and iteration == self.opt.densify_from_iter):
-                    self.resetOpacity()
+                    if iteration % self.opt.opacity_reset_interval == 0 or (self.dataset.white_background and iteration == self.opt.densify_from_iter):
+                        self.resetOpacity()
 
-                if iteration % self.opt.scaling_reset_interval == 0 or (self.dataset.white_background and iteration == self.opt.densify_from_iter):
-                    self.resetScaling()
+                    if iteration % self.opt.scaling_reset_interval == 0 or (self.dataset.white_background and iteration == self.opt.densify_from_iter):
+                        self.resetScaling()
 
-            if iteration % 100 == 0 and iteration > self.opt.densify_until_iter and not self.dataset.disable_filter3D:
-                self.gaussians.compute_3D_filter(cameras=self.scene.train_cameras)
+                if iteration % 100 == 0 and iteration > self.opt.densify_until_iter and not self.dataset.disable_filter3D:
+                    self.gaussians.compute_3D_filter(cameras=self.scene.train_cameras)
 
-            self.updateGSParams()
+                self.gaussians.optimizer.step()
+                self.gaussians.optimizer.zero_grad(set_to_none=True)
 
             self.iteration = iteration
         return True

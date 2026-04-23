@@ -529,6 +529,12 @@ class GaussianModel:
         optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")
         self._opacity = optimizable_tensors["opacity"]
 
+    def reset_scaling(self):
+        scales = self.get_scaling
+        scales_new = self.scaling_inverse_activation(torch.min(scales, torch.ones_like(scales) * 0.01))
+        optimizable_tensors = self.replace_tensor_to_optimizer(scales_new, "scaling")
+        self._scaling = optimizable_tensors["scaling"]
+
     def load_ply(self, path):
         plydata = PlyData.read(path)
 
